@@ -394,4 +394,4 @@ def extract(filename):
 # return send_from_directory(file_name, as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(debug=True)
