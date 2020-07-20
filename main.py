@@ -1,9 +1,14 @@
 from flask import Flask, request, render_template, send_from_directory ,jsonify,Response, url_for, redirect
 from openpyxl import load_workbook
+from google.cloud import storage
+
 from werkzeug.utils import secure_filename
 import os
+import logging
+client = storage.Client()
 
 app = Flask(__name__)
+CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
 UPLOAD_FOLDER = 'static/'
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,7 +27,7 @@ def tabular():
         if 'file' not in request.files:
             print('no file')
             return redirect(request.url)
-        file = request.files['file']
+        file = request.files.get['file']
         # if user does not select file, browser also
         # submit a empty part without filename
         if file.filename == '':
@@ -30,8 +35,19 @@ def tabular():
             return redirect(request.url)
         else:
             filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            print("saved file successfully")
+            # Create a Cloud Storage client.
+            gcs = storage.Client()
+
+            # Get the bucket that the file will be uploaded to.
+            bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
+
+            # Create a new blob and upload the file's content.
+            blob = bucket.blob(file.filename)
+
+            blob.upload_from_string(
+                file.read(),
+                content_type=file.content_type
+            )
       #send file name as parameter to downlad
             return redirect('/downloadfile/'+ filename)
     return render_template('tabular.html')
@@ -44,10 +60,11 @@ def return_files_tut(filename):
     file_path = UPLOAD_FOLDER + filename
     return send_file(file_path, as_attachment=True, attachment_filename='')
 
+
 @app.route("/extract/<filename>", methods=["GET", "POST"])
 def extract(filename):
     #filename = request.form['image']
-    target = os.path.join(APP_ROOT, 'static/')
+    target = os.path.join(APP_ROOT, 'blob/')
     destination = "/".join([target, filename])
     #image_path = os.path.join(app.config['static/'], filename)
     import cv2
