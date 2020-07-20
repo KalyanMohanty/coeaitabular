@@ -3,7 +3,7 @@ from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 import os
 
-app: Flask = Flask(__name__)
+app = Flask(__name__)
 UPLOAD_FOLDER = 'static/'
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
