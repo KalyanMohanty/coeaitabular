@@ -1,5 +1,7 @@
 runtime: python38
 api_version: 1
+env: flex
+entrypoint: gunicorn -b :$PORT main:app
 threadsafe: true
 
 handlers:
@@ -7,7 +9,3 @@ handlers:
   static_dir: static
 - url: /.*
   script: main.app
-  
-libraries:
-  - name: ssl
-    version: latest
