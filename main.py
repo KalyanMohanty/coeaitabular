@@ -27,8 +27,6 @@ APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 @app.route("/")
 def index():
     return render_template("tabular.html")
-
-
 @app.route('/tabular', methods=['POST'])
 def tabular():
     """Process the uploaded file and upload it to Google Cloud Storage."""
@@ -37,13 +35,12 @@ def tabular():
     if request.method == 'POST':
         if not uploaded_file:
             return 'No file uploaded.', 400
-
         # Open Image with Pillow
         else:
             image = Image.open(uploaded_file)
 
             # Resize image with Pillow (Problem still occurs without this step)
-            image.resize((300, 300))
+            image.resize((600, 600))
 
             # Create Filestorage object (This is the wrapper Flask uses for their file uploads)
 
@@ -58,7 +55,7 @@ def tabular():
 
             # Get the bucket that the file will be uploaded to.
             bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
-            filename = secure_filename(uploaded_file.filename)
+         #   filename = secure_filename(uploaded_file.filename)
             # Create a new blob and upload the file's content.
             blob = bucket.blob(uploaded_file.filename)
             FileStorage.seek(0)
@@ -71,8 +68,8 @@ def tabular():
 def test_image(filename):
   # Use BUCKET_NAME or the project default bucket.
   #BUCKET_NAME = CLOUD_STORAGE_BUCKET
-  BUCKET_NAME = '/' + os.environ.get('CLOUD_STORAGE_BUCKET',
-                                     app_identity.get_default_gcs_bucket_name())
+  #bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
+  BUCKET_NAME = '/' + os.environ.get('CLOUD_STORAGE_BUCKET')
   file = os.path.join(BUCKET_NAME, filename)
 
   gcs_file = storage.open(file)
