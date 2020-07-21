@@ -1,8 +1,11 @@
 from flask import Flask, request, render_template, send_from_directory, jsonify, Response, url_for, redirect,send_file
 from werkzeug.datastructures import FileStorage
+import cloudstorage
+from google.appengine.api import app_identity
 from openpyxl import load_workbook
 from google.cloud import storage
 import urllib.request
+import io
 from io import StringIO
 from werkzeug.utils import secure_filename
 import os
@@ -55,22 +58,34 @@ def tabular():
 
             # Get the bucket that the file will be uploaded to.
             bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
-
+            filename = secure_filename(uploaded_file.filename)
             # Create a new blob and upload the file's content.
             blob = bucket.blob(uploaded_file.filename)
             FileStorage.seek(0)
             blob.upload_from_file(FileStorage)
-
             # The public URL can be used to directly access the uploaded file via HTTP.
-            url_name = blob.public_url
-            return redirect('/downloadfile/' + url_name)
+            #url_name = blob.public_url
+            return redirect('/downloadfile/' + filename)
     return render_template('tabular.html')
+@app.route('/imagetest/<filename>')
+def test_image(filename):
+  # Use BUCKET_NAME or the project default bucket.
+  #BUCKET_NAME = CLOUD_STORAGE_BUCKET
+  BUCKET_NAME = '/' + os.environ.get('CLOUD_STORAGE_BUCKET',
+                                     app_identity.get_default_gcs_bucket_name())
+  file = os.path.join(BUCKET_NAME, filename)
 
+  gcs_file = cloudstorage.open(file)
+  contents = gcs_file.read()
+  gcs_file.close()
+
+  return send_file(io.BytesIO(contents),
+                   mimetype='image/jpeg')
 
 # Download API
-@app.route("/downloadfile/<url_name>", methods=['GET'])
-def download_file(url_name):
-    return render_template('download.html', value=url_name)
+@app.route("/downloadfile/<filename>", methods=['GET'])
+def download_file(filename):
+    return render_template('download.html', value=filename)
 
 
 @app.route('/return-files/<filename>')
@@ -79,14 +94,15 @@ def return_files_tut(filename):
     return send_file(file_path, as_attachment=True, attachment_filename='')
 
 
-@app.route("/extract/<url_name>", methods=["GET", "POST"])
-def extract(url_name):
+@app.route("/extract/<filename>", methods=["GET", "POST"])
+def extract(filename):
     # filename = request.form['image']
     #  target = os.path.join(APP_ROOT, 'blob/')
     # destination = "/".join([target, filename])
     # image_path = os.path.join(app.config['static/'], filename)
-    req = urllib.request.Request("{url_name}")
-    image = StringIO.StringIO(urllib.request.urlopen(req).read())
+    #req = urllib.request.Request("{url_name}")
+   # image = StringIO.StringIO(urllib.request.urlopen(req).read())
+    image = test_image(filename)
     import cv2
     import numpy as np
     import pandas as pd
