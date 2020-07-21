@@ -1,40 +1,55 @@
-from flask import Flask, request, render_template, send_from_directory ,jsonify,Response, url_for, redirect
+from flask import Flask, request, render_template, send_from_directory, jsonify, Response, url_for, redirect,send_file
+from werkzeug.datastructures import FileStorage
 from openpyxl import load_workbook
 from google.cloud import storage
-
+import urllib.request
+from io import StringIO
 from werkzeug.utils import secure_filename
 import os
-import logging
-client = storage.Client()
 
+try:
+    from PIL import Image
+except ImportError:
+    import Image
+import logging
+#GOOGLE_APPLICATION_CREDENTIALS = "satwik-credentials.json"
+#client = storage.Client.from_service_account_json('satwik-credentials.json')
+client = storage.Client()
 app = Flask(__name__)
 CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
-UPLOAD_FOLDER = 'static/'
+#UPLOAD_FOLDER = 'static/'
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+#fs = FileStorage()
 
 @app.route("/")
 def index():
     return render_template("tabular.html")
 
-@app.route('/tabular', methods=['GET', 'POST'])
+
+@app.route('/tabular', methods=['POST'])
 def tabular():
-    # app = Flask(__name__)
-    app = Flask(__name__, template_folder='templates')
-    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-    # Upload API
+    """Process the uploaded file and upload it to Google Cloud Storage."""
+    FileStorage.tell() != 0
+    uploaded_file = request.files.get('file')
     if request.method == 'POST':
-        # check if the post request has the file part
-        if 'file' not in request.files:
-            print('no file')
-            return redirect(request.url)
-        file = request.files.get['file']
-        # if user does not select file, browser also
-        # submit a empty part without filename
-        if file.filename == '':
-            print('no filename')
-            return redirect(request.url)
+        if not uploaded_file:
+            return 'No file uploaded.', 400
+
+        # Open Image with Pillow
         else:
-            filename = secure_filename(file.filename)
+            image = Image.open(uploaded_file)
+
+            # Resize image with Pillow (Problem still occurs without this step)
+            image.resize((300, 300))
+
+            # Create Filestorage object (This is the wrapper Flask uses for their file uploads)
+
+            # Save image with Pillow into FileStorage object.
+            image.save(FileStorage, format='JPEG')
+
+            # Verify that image was resized and works
+            Image.open(FileStorage).show()
+
             # Create a Cloud Storage client.
             gcs = storage.Client()
 
@@ -42,31 +57,36 @@ def tabular():
             bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
 
             # Create a new blob and upload the file's content.
-            blob = bucket.blob(file.filename)
+            blob = bucket.blob(uploaded_file.filename)
+            FileStorage.seek(0)
+            blob.upload_from_file(FileStorage)
 
-            blob.upload_from_string(
-                file.read(),
-                content_type=file.content_type
-            )
-      #send file name as parameter to downlad
-            return redirect('/downloadfile/'+ filename)
+            # The public URL can be used to directly access the uploaded file via HTTP.
+            url_name = blob.public_url
+            return redirect('/downloadfile/' + url_name)
     return render_template('tabular.html')
+
+
 # Download API
-@app.route("/downloadfile/<filename>", methods = ['GET'])
-def download_file(filename):
-    return render_template('download.html',value=filename)
+@app.route("/downloadfile/<url_name>", methods=['GET'])
+def download_file(url_name):
+    return render_template('download.html', value=url_name)
+
+
 @app.route('/return-files/<filename>')
 def return_files_tut(filename):
     file_path = UPLOAD_FOLDER + filename
     return send_file(file_path, as_attachment=True, attachment_filename='')
 
 
-@app.route("/extract/<filename>", methods=["GET", "POST"])
-def extract(filename):
-    #filename = request.form['image']
-    target = os.path.join(APP_ROOT, 'blob/')
-    destination = "/".join([target, filename])
-    #image_path = os.path.join(app.config['static/'], filename)
+@app.route("/extract/<url_name>", methods=["GET", "POST"])
+def extract(url_name):
+    # filename = request.form['image']
+    #  target = os.path.join(APP_ROOT, 'blob/')
+    # destination = "/".join([target, filename])
+    # image_path = os.path.join(app.config['static/'], filename)
+    req = urllib.request.Request("{url_name}")
+    image = StringIO.StringIO(urllib.request.urlopen(req).read())
     import cv2
     import numpy as np
     import pandas as pd
@@ -77,32 +97,28 @@ def extract(filename):
     cv2.destroyAllWindows()
     import csv
 
-    try:
-        from PIL import Image
-    except ImportError:
-        import Image
     import pytesseract
 
     # read your file
-    #file = upload()
-    #file = send_image(file)
-    image = cv2.imread(destination, 0)
+    # file = upload()
+    # file = send_image(file)
+    # image = cv2.imread(destination, 0)
     # image.shape
     # thresholding the image to a binary image
     # thresh,img_binary = cv2.threshold(image,120,255,cv2.THRESH_BINARY |cv2.THRESH_OTSU)#inverting the image
     img_binary = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     img_binary = 255 - img_binary  # inverting  the image
-    #cv2.imwrite('cv_inverted.png', img_binary)  # Plotting the image to see the output
+    # cv2.imwrite('cv_inverted.png', img_binary)  # Plotting the image to see the output
     plotting = plt.imshow(img_binary, cmap='gray')
     plt.show()
 
     # In[3]:
 
-   # np.array(image).shape[0]
+    # np.array(image).shape[0]
 
     # In[4]:
 
-  #  np.array(image).shape[1]
+    #  np.array(image).shape[1]
 
     # In[5]:
 
@@ -130,7 +146,7 @@ def extract(filename):
 
     image_1 = cv2.erode(img_binary, vertical_kernel, iterations=3)
     vertical_lines = cv2.dilate(image_1, vertical_kernel, iterations=3)
-   # cv2.imwrite("testing-vertical.jpg", vertical_lines)  # Plotting the generated image
+    # cv2.imwrite("testing-vertical.jpg", vertical_lines)  # Plotting the generated image
     plotting = plt.imshow(image_1, cmap='gray')
     plt.show()
 
@@ -139,7 +155,7 @@ def extract(filename):
     # Use horizontal kernel to detect and save the horizontal lines in a jpg
     image_2 = cv2.erode(img_binary, horizantal_kernel, iterations=3)
     horizontal_lines = cv2.dilate(image_2, horizantal_kernel, iterations=3)
-  #  cv2.imwrite("horizontal.jpg", horizontal_lines)  # Plotting the generated image
+    #  cv2.imwrite("horizontal.jpg", horizontal_lines)  # Plotting the generated image
     plotting = plt.imshow(image_2, cmap='gray')
     plt.show()
 
@@ -159,7 +175,7 @@ def extract(filename):
     # cv2.imwrite("img_combined.jpg", img_vh)
     bitxor = cv2.bitwise_xor(image, img_vh)
     bitnot = cv2.bitwise_not(bitxor)
-   # cv2.imwrite("bitnot.jpg", bitnot)
+    # cv2.imwrite("bitnot.jpg", bitnot)
     # Plotting the generated image
     plotting = plt.imshow(bitnot, cmap='gray')
     plt.show()
@@ -395,13 +411,14 @@ def extract(filename):
         dataframe.to_csv(),
         mimetype="text/csv",
         headers={"Content-disposition":
-                    "attachment; filename=filename.csv"})
+                     "attachment; filename=filename.csv"})
 
-   # print(data)
-   # return Response(dataframe.to_json(orient="columns"), mimetype='application/json')
-   # return render_template('table.html', tables=[dataframe.to_html(classes='data')], titles=dataframe.columns.values)
 
-    # In[55]:
+# print(data)
+# return Response(dataframe.to_json(orient="columns"), mimetype='application/json')
+# return render_template('table.html', tables=[dataframe.to_html(classes='data')], titles=dataframe.columns.values)
+
+# In[55]:
 
 
 #  data.to_excel("temp.xlsx")
