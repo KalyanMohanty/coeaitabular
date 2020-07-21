@@ -75,7 +75,7 @@ def test_image(filename):
                                      app_identity.get_default_gcs_bucket_name())
   file = os.path.join(BUCKET_NAME, filename)
 
-  gcs_file = cloudstorage.open(file)
+  gcs_file = storage.open(file)
   contents = gcs_file.read()
   gcs_file.close()
 
